@@ -70,7 +70,7 @@ export default function ScoreCircle({ score, size = 'md', showLabel = false, ani
       </div>
       {showLabel && (
         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${scoreBgClass} ${scoreColorClass}`}>
-          {score >= 90 ? '殿堂级' : score >= 80 ? '优秀级' : score >= 70 ? '良好级' : score >= 60 ? '及格级' : '不及格'}
+          {score >= 90 ? '殿堂级' : score >= 80 ? '精品级' : score >= 70 ? '优选级' : score >= 60 ? '商业级' : '基础级'}
         </span>
       )}
     </div>

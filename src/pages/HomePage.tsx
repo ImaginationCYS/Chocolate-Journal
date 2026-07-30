@@ -20,7 +20,7 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { reviews, stats, toggleFav } = useChocolate();
 
-  const recentReviews = reviews.slice(0, 3);
+  const recentReviews = reviews.slice(0, 4);
   const topReview = reviews.length > 0 ? reviews.reduce((a, b) => a.totalScore > b.totalScore ? a : b) : null;
 
   return (

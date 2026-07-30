@@ -40,7 +40,8 @@ export interface ChocolateReview {
   brand: string;
   origin: string;
   cocoaPercentage: number;
-  beanVariety: string;
+  beanVariety?: string;       // @deprecated 已替换为 flavorOrigin
+  flavorOrigin?: string;      // 增味物种产地（格式：国家-具体产地）
   price: number;
   purchaseDate: string;
   photo?: string;
@@ -56,6 +57,7 @@ export interface ChocolateReview {
   grade: Grade;
 
   // 元数据
+  categoryDetails?: Record<string, string[]>;
   personalNotes: string;
   tags: string[];
   isFavorite: boolean;
@@ -68,7 +70,8 @@ export interface DraftReview {
   brand: string;
   origin: string;
   cocoaPercentage: number;
-  beanVariety: string;
+  beanVariety?: string;       // @deprecated 已替换为 flavorOrigin
+  flavorOrigin?: string;      // 增味物种产地（格式：国家-具体产地）
   price: number;
   purchaseDate: string;
   photo?: string;
@@ -76,6 +79,7 @@ export interface DraftReview {
   aroma: AromaScores;
   flavor: FlavorScores;
   aftertaste: AftertasteScores;
+  categoryDetails?: Record<string, string[]>;
   personalNotes: string;
   tags: string[];
   isFavorite: boolean;
@@ -83,19 +87,28 @@ export interface DraftReview {
 
 export const GRADE_CONFIG: Record<Grade, { label: string; color: string; bgColor: string; borderColor: string; range: string }> = {
   legendary:  { label: '殿堂级', color: 'text-gold-400', bgColor: 'bg-gold-500/10', borderColor: 'border-gold-500/30', range: '90-100' },
-  excellent:  { label: '优秀级', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', range: '80-89' },
-  good:       { label: '良好级', color: 'text-sky-400', bgColor: 'bg-sky-500/10', borderColor: 'border-sky-500/30', range: '70-79' },
-  passable:   { label: '及格级', color: 'text-amber-400', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/30', range: '60-69' },
-  fail:       { label: '不及格', color: 'text-red-400', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', range: '<60' },
+  excellent:  { label: '精品级', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', range: '80-89' },
+  good:       { label: '优选级', color: 'text-sky-400', bgColor: 'bg-sky-500/10', borderColor: 'border-sky-500/30', range: '70-79' },
+  passable:   { label: '商业级', color: 'text-amber-400', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/30', range: '60-69' },
+  fail:       { label: '基础级', color: 'text-red-400', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', range: '<60' },
 };
 
-export const DEFAULT_AROMAS = [
-  '莓果', '柑橘', '热带水果', '核果', '红色水果',
-  '花香', '玫瑰', '茉莉',
-  '坚果', '杏仁', '榛子', '核桃',
-  '焦糖', '蜂蜜', '香草', '太妃糖',
-  '咖啡', '烟草', '木质', '桂皮', '皮革',
-  '可可', '烘焙', '烟熏', '泥土',
+export interface FlavorCategory {
+  icon: string;
+  name: string;
+  description: string;
+}
+
+/** 八大风味族 */
+export const FLAVOR_CATEGORIES: FlavorCategory[] = [
+  { icon: '🌸', name: '花香和果香族', description: '呈现鲜花的清雅芬芳与水果的酸甜活泼。如玫瑰、茉莉等花香，或柑橘、浆果、热带水果等果香，通常作为前调，带来明亮的第一印象。' },
+  { icon: '🌿', name: '草木与泥土组', description: '涵盖植物根茎、草本叶片、新鲜木材以及湿润土壤的气息。如青草、药草、雪松、檀木、苔藓或雨后泥土等，赋予巧克力沉稳、自然的大地感。' },
+  { icon: '🥜', name: '坚果与谷物族', description: '传递温暖、烘烤后的醇厚香气。如榛子、杏仁、核桃等坚果，以及烤麦芽、面包皮、谷物等，常见于中后段，增加饱满度与满足感。' },
+  { icon: '🔥', name: '烘焙与焦香族', description: '源自深度烘焙或高温反应产生的深邃香气。如黑咖啡、浓缩咖啡、烘烤可可豆、焦糖化的烟熏感，赋予巧克力浓郁而有力的底色。' },
+  { icon: '🍬', name: '甜香与乳香族', description: '体现甜美柔和、奶香浓郁的愉悦气息。如焦糖、太妃糖、蜂蜜、香草，以及奶油、黄油、炼乳等乳制品的温润香气，常用于平衡酸苦。' },
+  { icon: '🌶️', name: '辛香与刺激族', description: '带来温暖或辛辣的感官冲击。如肉桂、丁香、肉豆蔻、姜等暖系香料，或黑胡椒、辣椒等辛辣感，增加风味的层次与活力。' },
+  { icon: '🍷', name: '发酵与陈年族', description: '源于长时间发酵或熟成过程产生的复杂气息。如朗姆酒、威士忌、雪利酒等酒香，或果醋、酱油等发酵类香气，常伴随深沉悠长的余韵。' },
+  { icon: '🪨', name: '矿物与化学族', description: '体现风土特征的冷冽或特殊气息。如岩石、燧石、铁质、碘酒等矿物感，有时带有类似药水的微涩风味，是产地特性的重要标志。' },
 ];
 
 export function calculateTotalScore(appearance: AppearanceScores, aroma: AromaScores, flavor: FlavorScores, aftertaste: AftertasteScores): number {
@@ -129,3 +142,37 @@ export function getScoreBgColor(score: number): string {
   if (score >= 60) return 'bg-amber-500/15';
   return 'bg-red-500/15';
 }
+
+/*
+ * 🌸 花香和果香族 — 呈现鲜花的清雅芬芳与水果的酸甜活泼。
+ *    如玫瑰、茉莉等花香，或柑橘、浆果、热带水果等果香，
+ *    通常作为前调，带来明亮的第一印象。
+ *
+ * 🌿 草木与泥土组 — 涵盖植物根茎、草本叶片、新鲜木材以及湿润土壤的气息。
+ *    如青草、药草、雪松、檀木、苔藓或雨后泥土等，
+ *    赋予巧克力沉稳、自然的大地感。
+ *
+ * 🥜 坚果与谷物族 — 传递温暖、烘烤后的醇厚香气。
+ *    如榛子、杏仁、核桃等坚果，以及烤麦芽、面包皮、谷物等，
+ *    常见于中后段，增加饱满度与满足感。
+ *
+ * 🔥 烘焙与焦香族 — 源自深度烘焙或高温反应产生的深邃香气。
+ *    如黑咖啡、浓缩咖啡、烘烤可可豆、焦糖化的烟熏感，
+ *    赋予巧克力浓郁而有力的底色。
+ *
+ * 🍬 甜香与乳香族 — 体现甜美柔和、奶香浓郁的愉悦气息。
+ *    如焦糖、太妃糖、蜂蜜、香草，以及奶油、黄油、炼乳等乳制品的温润香气，
+ *    常用于平衡酸苦。
+ *
+ * 🌶️ 辛香与刺激族 — 带来温暖或辛辣的感官冲击。
+ *    如肉桂、丁香、肉豆蔻、姜等暖系香料，或黑胡椒、辣椒等辛辣感，
+ *    增加风味的层次与活力。
+ *
+ * 🍷 发酵与陈年族 — 源于长时间发酵或熟成过程产生的复杂气息。
+ *    如朗姆酒、威士忌、雪利酒等酒香，或果醋、酱油等发酵类香气，
+ *    常伴随深沉悠长的余韵。
+ *
+ * 🪨 矿物与化学族 — 体现风土特征的冷冽或特殊气息。
+ *    如岩石、燧石、铁质、碘酒等矿物感，有时带有类似药水的微涩风味，
+ *    是产地特性的重要标志。
+ */

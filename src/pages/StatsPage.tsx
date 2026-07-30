@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -8,10 +8,11 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart as RPieChart, Pie, Cell,
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   AreaChart, Area,
 } from 'recharts';
 import AnimatedPage from '../components/AnimatedPage';
+import RadarChart from '../components/RadarChart';
+import { getNormalizedScores, getNormalizedScoresFloor, getNormalizedScoresZScore } from '../utils/radar';
 import EmptyState from '../components/EmptyState';
 import { useChocolate } from '../context/ChocolateContext';
 import { GRADE_CONFIG, Grade } from '../types';
@@ -26,15 +27,16 @@ const COLORS = {
 
 const GRADE_LABELS: Record<Grade, string> = {
   legendary: '殿堂级',
-  excellent: '优秀级',
-  good: '良好级',
-  passable: '及格级',
-  fail: '不及格',
+  excellent: '精品级',
+  good: '优选级',
+  passable: '商业级',
+  fail: '基础级',
 };
 
 export default function StatsPage() {
   const navigate = useNavigate();
   const { reviews, stats } = useChocolate();
+  const [normalizeMode, setNormalizeMode] = useState<'linear' | 'floor' | 'zscore'>('linear');
 
   // 评分分布数据
   const scoreDistribution = useMemo(() => {
@@ -60,29 +62,27 @@ export default function StatsPage() {
     }));
   }, [stats.byGrade]);
 
-  // 雷达图数据 - 平均各维度得分
-  const radarData = useMemo(() => {
-    if (reviews.length === 0) return [];
-    const avg = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
-    const appearanceAvg = avg(reviews.map(r => ((r.appearance.gloss + r.appearance.snap + r.appearance.texture) / 20) * 100));
-    const aromaAvg = avg(reviews.map(r => ((r.aroma.purity + r.aroma.intensity + r.aroma.complexity) / 20) * 100));
-    const flavorAvg = avg(reviews.map(r => ((r.flavor.balance + r.flavor.clarity + r.flavor.tannin) / 45) * 100));
-    const aftertasteAvg = avg(reviews.map(r => ((r.aftertaste.duration + r.aftertaste.quality + r.aftertaste.personal) / 15) * 100));
-
-    return [
-      { dimension: '外观与质地', score: Math.round(appearanceAvg), fullMark: 100 },
-      { dimension: '香气复杂度', score: Math.round(aromaAvg), fullMark: 100 },
-      { dimension: '风味与平衡', score: Math.round(flavorAvg), fullMark: 100 },
-      { dimension: '余韵与共鸣', score: Math.round(aftertasteAvg), fullMark: 100 },
-    ];
-  }, [reviews]);
+  // 12 维雷达图数据 - 所有记录的平均归一化得分
+  const avgRadarData = useMemo(() => {
+    if (reviews.length === 0) return null;
+    const n = reviews.length;
+    const normalizeFn =
+      normalizeMode === 'floor' ? getNormalizedScoresFloor
+      : normalizeMode === 'zscore' ? (r: typeof reviews[0]) => getNormalizedScoresZScore(r, reviews)
+      : getNormalizedScores;
+    const sums = Array(12).fill(0);
+    reviews.forEach(r => {
+      const scores = normalizeFn(r);
+      scores.forEach((v, i) => { sums[i] += v; });
+    });
+    return { name: `平均 (${n}款)`, values: sums.map(s => Math.round(s / n)) };
+  }, [reviews, normalizeMode]);
 
   // 产地统计
   const originStats = useMemo(() => {
     return Object.entries(stats.byOrigin)
       .map(([origin, count]) => ({ origin, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
+      .sort((a, b) => b.count - a.count);
   }, [stats.byOrigin]);
 
   // 随时间品鉴数量
@@ -107,7 +107,7 @@ export default function StatsPage() {
   const topAromas = useMemo(() => {
     const count: Record<string, number> = {};
     reviews.forEach(r => r.aroma.aromas.forEach(a => { count[a] = (count[a] || 0) + 1; }));
-    return Object.entries(count).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    return Object.entries(count).sort((a, b) => b[1] - a[1]);
   }, [reviews]);
 
   if (reviews.length === 0) {
@@ -185,32 +185,64 @@ export default function StatsPage() {
             </ResponsiveContainer>
           </motion.div>
 
-          {/* 雷达图 */}
+          {/* 12 维雷达图 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="glass-card p-5"
+            className="glass-card p-5 md:col-span-2 overflow-visible"
+            style={{ marginLeft: '-0.75rem', marginRight: '-0.75rem', paddingLeft: '1rem', paddingRight: '1rem' }}
           >
-            <h3 className="font-display text-sm font-semibold text-noir-200 mb-4 flex items-center gap-2">
+            <h3 className="font-display text-sm font-semibold text-noir-200 mb-4 flex items-center gap-2 px-3">
               <Target size={14} className="text-gold-400" />
               各维度平均表现
+              {/* 归一化模式切换 */}
+              <div className="ml-auto flex items-center gap-1 bg-noir-800/50 rounded-lg p-0.5">
+                <button
+                  onClick={() => setNormalizeMode('linear')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 ${
+                    normalizeMode === 'linear'
+                      ? 'bg-gold-500/20 text-gold-300 shadow-sm'
+                      : 'text-noir-500 hover:text-noir-300'
+                  }`}
+                >
+                  原始
+                </button>
+                <button
+                  onClick={() => setNormalizeMode('floor')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 ${
+                    normalizeMode === 'floor'
+                      ? 'bg-gold-500/20 text-gold-300 shadow-sm'
+                      : 'text-noir-500 hover:text-noir-300'
+                  }`}
+                >
+                  基准线
+                </button>
+                <button
+                  onClick={() => setNormalizeMode('zscore')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 ${
+                    normalizeMode === 'zscore'
+                      ? 'bg-gold-500/20 text-gold-300 shadow-sm'
+                      : 'text-noir-500 hover:text-noir-300'
+                  }`}
+                >
+                  Z-Score
+                </button>
+              </div>
             </h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <RadarChart data={radarData}>
-                <PolarGrid stroke="rgba(255,255,255,0.06)" />
-                <PolarAngleAxis dataKey="dimension" tick={{ fill: '#8F8277', fontSize: 11 }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                <Radar
-                  name="平均得分率"
-                  dataKey="score"
-                  stroke="#E8B93A"
-                  fill="#E8B93A"
-                  fillOpacity={0.15}
-                  strokeWidth={2}
+            {avgRadarData ? (
+              <div className="flex justify-center overflow-visible" key={normalizeMode}>
+                <RadarChart
+                  datasets={normalizeMode === 'zscore'
+                    ? [avgRadarData, { name: '平均基准', values: Array(12).fill(50), baseline: true }]
+                    : [avgRadarData]
+                  }
+                  size={340}
                 />
-              </RadarChart>
-            </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-center text-noir-500 text-sm py-8">暂无数据</p>
+            )}
           </motion.div>
 
           {/* 等级分布饼图 */}
@@ -316,7 +348,7 @@ export default function StatsPage() {
           >
             <h3 className="font-display text-sm font-semibold text-noir-200 mb-4 flex items-center gap-2">
               <MapPin size={14} className="text-gold-400" />
-              产地分布 TOP 8
+              产地分布 TOP 榜
             </h3>
             {originStats.length > 0 ? (
               <div className="space-y-3">
@@ -350,7 +382,7 @@ export default function StatsPage() {
           >
             <h3 className="font-display text-sm font-semibold text-noir-200 mb-4 flex items-center gap-2">
               <Sparkles size={14} className="text-gold-400" />
-              热门风味 TOP 10
+              热门风味 TOP 榜
             </h3>
             {topAromas.length > 0 ? (
               <div className="space-y-3">

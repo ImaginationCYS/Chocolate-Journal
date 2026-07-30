@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Eye, Ear, Wind, Hand, ChefHat, Heart,
+  Eye, Wind, ChefHat, Heart,
   ChevronRight, ChevronLeft, Save, Sparkles, AlertCircle,
-  Check, Camera, Tag, Plus, X
+  Camera, Tag, Plus, X
 } from 'lucide-react';
 import AnimatedPage from '../components/AnimatedPage';
 import ScoreInput from '../components/ScoreInput';
 import { useChocolate } from '../context/ChocolateContext';
 import {
   DraftReview, AppearanceScores, AromaScores, FlavorScores, AftertasteScores,
-  DEFAULT_AROMAS, calculateTotalScore, getGrade, GRADE_CONFIG
+  FLAVOR_CATEGORIES, calculateTotalScore, getGrade, GRADE_CONFIG
 } from '../types';
 
 const STEPS = [
@@ -33,25 +33,80 @@ export default function AddReviewPage() {
   const editId = searchParams.get('edit');
   const isEditing = !!editId;
 
-  const { addNewReview, editReview, getReview } = useChocolate();
+  const { addNewReview, editReview, getReview, reviews } = useChocolate();
   const existingReview = editId ? getReview(editId) : undefined;
 
   const [step, setStep] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
   const [showReview, setShowReview] = useState(false);
 
   // 基本信息
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
-  const [origin, setOrigin] = useState('');
+  const [originCountry, setOriginCountry] = useState('');
+  const [originRegion, setOriginRegion] = useState('');
   const [cocoaPercentage, setCocoaPercentage] = useState(70);
-  const [beanVariety, setBeanVariety] = useState('');
+  const [flavorVariety, setFlavorVariety] = useState('');
+  const [flavorOriginDetail, setFlavorOriginDetail] = useState('');
   const [price, setPrice] = useState(0);
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [personalNotes, setPersonalNotes] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
-  const [customAromaInput, setCustomAromaInput] = useState('');
+  // 品牌下拉
+  const [brandFocus, setBrandFocus] = useState(false);
+  const [brandHighlight, setBrandHighlight] = useState(-1);
+  const brandRef = useRef<HTMLDivElement>(null);
+
+  const knownBrands = useMemo(() => {
+    const set = new Set(reviews.map(r => r.brand).filter(Boolean));
+    return Array.from(set).sort();
+  }, [reviews]);
+
+  const filteredBrands = useMemo(() => {
+    if (!brand.trim()) return knownBrands;
+    const q = brand.toLowerCase();
+    return knownBrands.filter(b => b.toLowerCase().includes(q));
+  }, [brand, knownBrands]);
+
+  const selectBrand = useCallback((b: string) => {
+    setBrand(b);
+    setBrandFocus(false);
+    setBrandHighlight(-1);
+  }, []);
+
+  // 点击外部关闭
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (brandRef.current && !brandRef.current.contains(e.target as Node)) {
+        setBrandFocus(false);
+        setBrandHighlight(-1);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleBrandKeyDown = (e: React.KeyboardEvent) => {
+    if (!brandFocus || filteredBrands.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setBrandHighlight(i => Math.min(i + 1, filteredBrands.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setBrandHighlight(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && brandHighlight >= 0) {
+      e.preventDefault();
+      selectBrand(filteredBrands[brandHighlight]);
+    } else if (e.key === 'Escape') {
+      setBrandFocus(false);
+      setBrandHighlight(-1);
+    }
+  };
+  // 每个风味大类下自定义的具体香气
+  const [categoryDetails, setCategoryDetails] = useState<Record<string, string[]>>({});
+  const [hoveredCat, setHoveredCat] = useState<string | null>(null);
 
   // 外观
   const [appearance, setAppearance] = useState<AppearanceScores>(defaultAppearance);
@@ -72,7 +127,7 @@ export default function AddReviewPage() {
     const errs: Record<string, string> = {};
     if (!name.trim()) errs.name = '请输入巧克力名称';
     if (!brand.trim()) errs.brand = '请输入品牌名称';
-    if (!origin.trim()) errs.origin = '请输入产地';
+    if (!originCountry.trim()) errs.originCountry = '请输入产地国家';
     if (cocoaPercentage < 30 || cocoaPercentage > 100) errs.cocoa = '可可含量需在30%-100%之间';
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -91,19 +146,26 @@ export default function AddReviewPage() {
     if (step > 0) setStep(step - 1);
   };
 
+  const composeOrigin = (country: string, region: string) => {
+    const c = country.trim();
+    const r = region.trim();
+    return r ? `${c}-${r}` : c;
+  };
+
   const handleSubmit = () => {
     const draft: DraftReview = {
       name: name.trim(),
       brand: brand.trim(),
-      origin: origin.trim(),
+      origin: composeOrigin(originCountry, originRegion),
       cocoaPercentage,
-      beanVariety: beanVariety.trim(),
+      flavorOrigin: composeOrigin(flavorOriginDetail, flavorVariety) || undefined,
       price,
       purchaseDate,
       appearance,
       aroma,
       flavor,
       aftertaste,
+      categoryDetails,
       personalNotes: personalNotes.trim(),
       tags,
       isFavorite,
@@ -126,21 +188,19 @@ export default function AddReviewPage() {
     setTagInput('');
   };
 
-  const toggleAromaTag = (aroma: string) => {
-    setAroma(prev => ({
+  const addCategoryAroma = (catName: string, value: string) => {
+    if (!value || categoryDetails[catName]?.includes(value)) return;
+    setCategoryDetails(prev => ({
       ...prev,
-      aromas: prev.aromas.includes(aroma)
-        ? prev.aromas.filter(a => a !== aroma)
-        : [...prev.aromas, aroma],
+      [catName]: [...(prev[catName] || []), value],
     }));
   };
 
-  const addCustomAroma = () => {
-    const trimmed = customAromaInput.trim();
-    if (trimmed && !aroma.aromas.includes(trimmed)) {
-      setAroma(prev => ({ ...prev, aromas: [...prev.aromas, trimmed] }));
-    }
-    setCustomAromaInput('');
+  const removeCategoryAroma = (catName: string, value: string) => {
+    setCategoryDetails(prev => ({
+      ...prev,
+      [catName]: (prev[catName] || []).filter(a => a !== value),
+    }));
   };
 
   // 编辑模式：从已有记录回填数据
@@ -148,16 +208,28 @@ export default function AddReviewPage() {
     if (existingReview) {
       setName(existingReview.name);
       setBrand(existingReview.brand);
-      setOrigin(existingReview.origin);
+      // 解析已有产地格式 "国家-具体产地"
+      const originParts = (existingReview.origin || '').split('-');
+      setOriginCountry(originParts[0] || '');
+      setOriginRegion(originParts.slice(1).join('-') || '');
       setCocoaPercentage(existingReview.cocoaPercentage);
-      setBeanVariety(existingReview.beanVariety);
+      // 解析增味产地（格式：产地-品类）
+      const flavorParts = (existingReview.flavorOrigin || '').split('-');
+      setFlavorOriginDetail(flavorParts[0] || '');
+      setFlavorVariety(flavorParts.slice(1).join('-') || '');
       setPrice(existingReview.price);
       setPurchaseDate(existingReview.purchaseDate);
       setPersonalNotes(existingReview.personalNotes);
       setTags(existingReview.tags);
       setIsFavorite(existingReview.isFavorite);
       setAppearance(existingReview.appearance);
-      setAroma(existingReview.aroma);
+
+      // 清理旧版平铺标签，只保留新版八大风味族大类名称
+      const categoryNames = FLAVOR_CATEGORIES.map(c => c.name);
+      const cleanedAromas = existingReview.aroma.aromas.filter(a => categoryNames.includes(a));
+      setAroma({ ...existingReview.aroma, aromas: cleanedAromas });
+      setCategoryDetails(existingReview.categoryDetails || {});
+
       setFlavor(existingReview.flavor);
       setAftertaste(existingReview.aftertaste);
     }
@@ -200,8 +272,16 @@ export default function AddReviewPage() {
             {STEPS.map((s, i) => (
               <button
                 key={s.id}
-                onClick={() => setStep(i)}
+                onClick={() => {
+                  if (i === step && !collapsed) {
+                    setCollapsed(true);
+                  } else {
+                    setStep(i);
+                    setCollapsed(false);
+                  }
+                }}
                 className={`flex-1 h-1.5 rounded-full transition-all duration-500 cursor-pointer hover:opacity-80 ${
+                  collapsed && i === step ? 'bg-noir-800' :
                   i < step ? 'bg-gold-500' :
                   i === step ? 'bg-gold-400 shadow-lg shadow-gold-500/30 scale-y-125' :
                   'bg-noir-800 hover:bg-noir-700'
@@ -215,14 +295,23 @@ export default function AddReviewPage() {
             {STEPS.map((s, i) => (
               <button
                 key={s.id}
-                onClick={() => setStep(i)}
+                onClick={() => {
+                  if (i === step && !collapsed) {
+                    setCollapsed(true);
+                  } else {
+                    setStep(i);
+                    setCollapsed(false);
+                  }
+                }}
                 className={`flex flex-col items-center gap-1 transition-all duration-300 cursor-pointer
                   hover:scale-105 active:scale-95
-                  ${i === step
-                    ? 'text-gold-400 scale-110'
-                    : i < step
-                      ? 'text-gold-500/60 hover:text-gold-400'
-                      : 'text-noir-600 hover:text-noir-400'
+                  ${collapsed && i === step
+                    ? 'text-noir-600'
+                    : i === step
+                      ? 'text-gold-400 scale-110'
+                      : i < step
+                        ? 'text-gold-500/60 hover:text-gold-400'
+                        : 'text-noir-600 hover:text-noir-400'
                   }`}
               >
                 <s.icon size={i === step ? 16 : 14} />
@@ -234,14 +323,15 @@ export default function AddReviewPage() {
 
         {/* 表单内容 */}
         <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -30 }}
-            transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-            className="glass-card p-6 md:p-8"
-          >
+          {!collapsed && (
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+              className="glass-card p-6 md:p-8"
+            >
             {/* Step 0: 基本信息 */}
             {step === 0 && (
               <div className="space-y-5">
@@ -268,28 +358,69 @@ export default function AddReviewPage() {
                     {errors.name && <p className="text-xs text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={12} />{errors.name}</p>}
                   </div>
 
-                  <div>
+                  <div ref={brandRef} className="relative">
                     <label className="input-label">品牌 *</label>
                     <input
                       type="text"
                       value={brand}
-                      onChange={e => setBrand(e.target.value)}
+                      onChange={e => { setBrand(e.target.value); setBrandFocus(true); setBrandHighlight(-1); }}
+                      onFocus={() => { if (knownBrands.length > 0) setBrandFocus(true); }}
+                      onKeyDown={handleBrandKeyDown}
                       placeholder="例如：Amedei"
+                      autoComplete="off"
                       className={`input-field ${errors.brand ? 'border-red-500/50' : ''}`}
                     />
                     {errors.brand && <p className="text-xs text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={12} />{errors.brand}</p>}
-                  </div>
-
-                  <div>
-                    <label className="input-label">产地 *</label>
-                    <input
-                      type="text"
-                      value={origin}
-                      onChange={e => setOrigin(e.target.value)}
-                      placeholder="例如：委内瑞拉"
-                      className={`input-field ${errors.origin ? 'border-red-500/50' : ''}`}
-                    />
-                    {errors.origin && <p className="text-xs text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={12} />{errors.origin}</p>}
+                    {/* 品牌建议下拉 */}
+                    {brandFocus && filteredBrands.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8, scaleY: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scaleY: 1 }}
+                        transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+                        className="absolute left-0 right-0 top-full mt-2 z-50
+                          bg-noir-900/90 backdrop-blur-2xl
+                          border border-white/[0.06] rounded-2xl
+                          shadow-[0_16px_48px_-12px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.02)_inset]
+                          overflow-hidden origin-top"
+                      >
+                        <div className="max-h-52 overflow-y-auto custom-scrollbar p-1.5">
+                          {filteredBrands.map((b, i) => {
+                            const matchIdx = brand.length > 0 ? b.toLowerCase().indexOf(brand.toLowerCase()) : -1;
+                            return (
+                            <button
+                              key={b}
+                              type="button"
+                              onClick={() => selectBrand(b)}
+                              onMouseEnter={() => setBrandHighlight(i)}
+                              className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium
+                                transition-all duration-200 ease-out
+                                ${i === brandHighlight
+                                  ? 'bg-gold-500/10 text-gold-200 shadow-[0_0_0_1px_rgba(196,155,108,0.15)_inset]'
+                                  : 'text-noir-300 hover:bg-white/[0.03] hover:text-noir-100'
+                                }
+                                ${i === 0 ? '' : ''}`}
+                            >
+                              {matchIdx >= 0 ? (
+                                <span>
+                                  <span className="text-noir-400">{b.slice(0, matchIdx)}</span>
+                                  <span className="text-gold-400">{b.slice(matchIdx, matchIdx + brand.length)}</span>
+                                  <span className="text-noir-400">{b.slice(matchIdx + brand.length)}</span>
+                                </span>
+                              ) : (
+                                b
+                              )}
+                            </button>
+                            );
+                          })}
+                        </div>
+                        {knownBrands.length > 0 && (
+                          <div className="px-4 py-2 border-t border-white/[0.04] flex items-center justify-between">
+                            <span className="text-[10px] tracking-wider text-noir-500 uppercase">已知品牌</span>
+                            <span className="text-[10px] text-noir-600">{knownBrands.length} 个</span>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
                   </div>
 
                   <div>
@@ -305,15 +436,45 @@ export default function AddReviewPage() {
                     {errors.cocoa && <p className="text-xs text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={12} />{errors.cocoa}</p>}
                   </div>
 
-                  <div>
-                    <label className="input-label">可可豆品种</label>
-                    <input
-                      type="text"
-                      value={beanVariety}
-                      onChange={e => setBeanVariety(e.target.value)}
-                      placeholder="例如：Criollo、Trinitario"
-                      className="input-field"
-                    />
+                  <div className="sm:col-span-2">
+                    <label className="input-label">可可产地 *</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={originCountry}
+                        onChange={e => setOriginCountry(e.target.value)}
+                        placeholder="国家，例如：委内瑞拉"
+                        className={`input-field text-sm ${errors.originCountry ? 'border-red-500/50' : ''}`}
+                      />
+                      <input
+                        type="text"
+                        value={originRegion}
+                        onChange={e => setOriginRegion(e.target.value)}
+                        placeholder="具体产地，例如：Chuao"
+                        className="input-field text-sm"
+                      />
+                    </div>
+                    {errors.originCountry && <p className="text-xs text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={12} />{errors.originCountry}</p>}
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="input-label">增味物种产地及品类</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={flavorOriginDetail}
+                        onChange={e => setFlavorOriginDetail(e.target.value)}
+                        placeholder="产地，例如：意大利南蒂罗尔"
+                        className="input-field text-sm"
+                      />
+                      <input
+                        type="text"
+                        value={flavorVariety}
+                        onChange={e => setFlavorVariety(e.target.value)}
+                        placeholder="品类，例如：杜松子酒"
+                        className="input-field text-sm"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -390,12 +551,12 @@ export default function AddReviewPage() {
                   </div>
                   <div>
                     <h2 className="font-display text-lg font-semibold text-noir-100">外观与质地</h2>
-                    <p className="text-sm text-noir-500">满分 20 分：光泽度 5 + 断裂声 5 + 融化质地 10</p>
+                    <p className="text-sm text-noir-500">满分 20 分：外观光泽 5 + 断裂声响 5 + 融化质地 10</p>
                   </div>
                 </div>
 
                 <ScoreInput
-                  label="光泽度"
+                  label="外观光泽"
                   value={appearance.gloss}
                   max={5}
                   onChange={v => setAppearance({ ...appearance, gloss: v })}
@@ -403,7 +564,7 @@ export default function AddReviewPage() {
                   color="#CD9575"
                 />
                 <ScoreInput
-                  label="断裂声"
+                  label="断裂声响"
                   value={appearance.snap}
                   max={5}
                   onChange={v => setAppearance({ ...appearance, snap: v })}
@@ -449,12 +610,12 @@ export default function AddReviewPage() {
                   </div>
                   <div>
                     <h2 className="font-display text-lg font-semibold text-noir-100">香气复杂度</h2>
-                    <p className="text-sm text-noir-500">满分 20 分：纯净度 5 + 强度 5 + 层次 10</p>
+                    <p className="text-sm text-noir-500">满分 20 分：香气纯净 5 + 香气强度 5 + 香气层次 10</p>
                   </div>
                 </div>
 
                 <ScoreInput
-                  label="纯净度"
+                  label="香气纯净"
                   value={aroma.purity}
                   max={5}
                   onChange={v => setAroma({ ...aroma, purity: v })}
@@ -470,7 +631,7 @@ export default function AddReviewPage() {
                   color="#F5C842"
                 />
                 <ScoreInput
-                  label="层次丰富度"
+                  label="香气层次"
                   value={aroma.complexity}
                   max={10}
                   onChange={v => setAroma({ ...aroma, complexity: v })}
@@ -501,52 +662,119 @@ export default function AddReviewPage() {
                   </div>
                 </div>
 
-                {/* 风味标签选择 */}
+                {/* 风味族选择 */}
                 <div>
                   <label className="input-label">选择风味线索（可多选，支持自定义）</label>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {DEFAULT_AROMAS.map(a => (
-                      <button
-                        key={a}
-                        onClick={() => toggleAromaTag(a)}
-                        className={`tag transition-all duration-200 ${
-                          aroma.aromas.includes(a) ? 'tag-selected' : 'tag-default'
-                        }`}
-                      >
-                        {aroma.aromas.includes(a) && <Check size={12} />}
-                        {a}
-                      </button>
-                    ))}
-                    {/* 自定义风味标签 */}
-                    {aroma.aromas.filter(a => !DEFAULT_AROMAS.includes(a)).map(a => (
-                      <button
-                        key={a}
-                        onClick={() => toggleAromaTag(a)}
-                        className="tag tag-selected group"
-                      >
-                        <Check size={12} />
-                        {a}
-                        <X
-                          size={12}
-                          className="ml-0.5 opacity-60 group-hover:opacity-100 hover:text-red-400"
-                          onClick={(e) => { e.stopPropagation(); toggleAromaTag(a); }}
-                        />
-                      </button>
-                    ))}
+
+                  {/* 八大风味族 */}
+                  <div className="grid sm:grid-cols-2 gap-2 mb-3">
+                    {FLAVOR_CATEGORIES.map((cat) => {
+                      const isSelected = aroma.aromas.includes(cat.name);
+                      const catItems = categoryDetails[cat.name] || [];
+                      return (
+                        <div key={cat.name} className="relative"
+                          onMouseEnter={() => setHoveredCat(cat.name)}
+                          onMouseLeave={() => setHoveredCat(null)}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setAroma(prev => ({
+                                  ...prev,
+                                  aromas: prev.aromas.filter(a => a !== cat.name),
+                                }));
+                                setCategoryDetails(prev => {
+                                  const next = { ...prev };
+                                  delete next[cat.name];
+                                  return next;
+                                });
+                              } else {
+                                setAroma(prev => ({
+                                  ...prev,
+                                  aromas: [...prev.aromas, cat.name],
+                                }));
+                              }
+                            }}
+                            className={`w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all duration-300 ${
+                              isSelected
+                                ? 'bg-cocoa-500/15 border border-cocoa-500/30 text-cocoa-200'
+                                : 'bg-white/[0.03] border border-white/[0.06] text-noir-300 hover:border-cocoa-500/40 hover:text-noir-100'
+                            }`}
+                          >
+                            <span className="text-lg">{cat.icon}</span>
+                            <span className="font-medium">{cat.name}</span>
+                          </button>
+
+                          {/* 悬停 tooltip */}
+                          <AnimatePresence>
+                            {hoveredCat === cat.name && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                                transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+                                className="absolute bottom-full left-0 mb-2 w-64 p-3 rounded-xl bg-noir-700 border border-white/[0.1] shadow-2xl shadow-black/60 z-50"
+                              >
+                                <p className="text-[11px] text-noir-200 leading-relaxed">{cat.description}</p>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* 选中时显示该类下的具体香气 + 输入 */}
+                          {isSelected && (
+                            <div className="mt-1.5 ml-2">
+                              {catItems.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-1.5">
+                                  {[...catItems].sort((a, b) => b.length - a.length).map(item => (
+                                    <span key={item} className="tag tag-selected text-xs group">
+                                      {item}
+                                      <X
+                                        size={10}
+                                        className="ml-0.5 opacity-50 group-hover:opacity-100 hover:text-red-400 cursor-pointer"
+                                        onClick={() => removeCategoryAroma(cat.name, item)}
+                                      />
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  placeholder="输入具体香气后按回车…"
+                                  className="input-field flex-1 text-xs py-1.5 px-2"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const val = (e.target as HTMLInputElement).value.trim();
+                                      addCategoryAroma(cat.name, val);
+                                      (e.target as HTMLInputElement).value = '';
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={customAromaInput}
-                      onChange={e => setCustomAromaInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomAroma(); } }}
-                      placeholder="输入自定义风味后按回车…"
-                      className="input-field flex-1 text-sm"
-                    />
-                    <button onClick={addCustomAroma} className="btn-outline px-3 py-2.5 text-sm">
-                      <Plus size={14} />
-                    </button>
-                  </div>
+
+                  {/* 已选风味族汇总 — 紧凑标签 */}
+                  {aroma.aromas.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-2 border-t border-white/[0.05]">
+                      {aroma.aromas.map(a => {
+                        const cat = FLAVOR_CATEGORIES.find(c => c.name === a);
+                        const items = categoryDetails[a] || [];
+                        return (
+                          <span key={a} className="tag tag-default text-xs">
+                            {cat?.icon} {a}
+                            {items.length > 0 && `（${[...items].sort((a, b) => b.length - a.length).join('、')}）`}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-purple-500/5 border border-purple-500/10">
@@ -568,12 +796,12 @@ export default function AddReviewPage() {
                   </div>
                   <div>
                     <h2 className="font-display text-lg font-semibold text-noir-100">风味与平衡度</h2>
-                    <p className="text-sm text-noir-500">满分 45 分：酸苦甜平衡 15 + 风味清晰度 20 + 单宁涩感 10</p>
+                    <p className="text-sm text-noir-500">满分 45 分：酸甜平衡 15 + 风味清晰 20 + 单宁涩感 10</p>
                   </div>
                 </div>
 
                 <ScoreInput
-                  label="酸、苦、甜平衡"
+                  label="酸甜平衡"
                   value={flavor.balance}
                   max={15}
                   onChange={v => setFlavor({ ...flavor, balance: v })}
@@ -581,7 +809,7 @@ export default function AddReviewPage() {
                   color="#E88078"
                 />
                 <ScoreInput
-                  label="风味清晰度与层次"
+                  label="风味清晰"
                   value={flavor.clarity}
                   max={20}
                   onChange={v => setFlavor({ ...flavor, clarity: v })}
@@ -710,9 +938,11 @@ export default function AddReviewPage() {
               </div>
             )}
           </motion.div>
+          )}
         </AnimatePresence>
 
         {/* 底部按钮 */}
+        {!collapsed && (
         <div className="flex items-center justify-between mt-6">
           <button
             onClick={handlePrev}
@@ -742,6 +972,7 @@ export default function AddReviewPage() {
             </button>
           </div>
         </div>
+        )}
 
         {/* 提交确认弹窗 */}
         <AnimatePresence>
@@ -788,8 +1019,8 @@ export default function AddReviewPage() {
                 {/* 基本信息 */}
                 <div className="text-sm text-noir-400 space-y-1 mb-6">
                   <p><span className="text-noir-500">名称：</span>{name} {brand && `· ${brand}`}</p>
-                  <p><span className="text-noir-500">产地：</span>{origin} · {cocoaPercentage}% 可可</p>
-                  {beanVariety && <p><span className="text-noir-500">品种：</span>{beanVariety}</p>}
+                  <p><span className="text-noir-500">产地：</span>{composeOrigin(originCountry, originRegion)} · {cocoaPercentage}% 可可</p>
+                  {(flavorOriginDetail || flavorVariety) && <p><span className="text-noir-500">增味：</span>{composeOrigin(flavorOriginDetail, flavorVariety)}</p>}
                 </div>
 
                 <div className="flex gap-3">

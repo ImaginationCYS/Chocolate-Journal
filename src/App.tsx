@@ -6,6 +6,7 @@ import AddReviewPage from './pages/AddReviewPage';
 import CollectionPage from './pages/CollectionPage';
 import DetailPage from './pages/DetailPage';
 import StatsPage from './pages/StatsPage';
+import ComparePage from './pages/ComparePage';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="collection" element={<CollectionPage />} />
             <Route path="detail/:id" element={<DetailPage />} />
             <Route path="stats" element={<StatsPage />} />
+            <Route path="compare" element={<ComparePage />} />
           </Route>
         </Routes>
       </ChocolateProvider>

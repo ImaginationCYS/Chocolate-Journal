@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Heart, MapPin, Calendar } from 'lucide-react';
 import { ChocolateReview } from '../types';
 import ScoreCircle from './ScoreCircle';
-import { formatDate, formatPrice, getOriginFlag } from '../utils/helpers';
+import { formatDate, formatPrice, getOriginCode } from '../utils/helpers';
 
 interface ChocolateCardProps {
   review: ChocolateReview;
@@ -50,12 +50,13 @@ export default function ChocolateCard({ review, index, onToggleFavorite }: Choco
       <div className="flex items-center gap-3 mb-4 text-xs text-noir-400">
         <span className="inline-flex items-center gap-1">
           <MapPin size={12} />
-          {getOriginFlag(review.origin)} {review.origin || '未知产地'}
+          <span className="text-[10px] font-mono font-semibold bg-noir-800 text-noir-300 px-1.5 py-0.5 rounded">{getOriginCode(review.origin)}</span>
+          {review.origin || '未知产地'}
         </span>
         {review.cocoaPercentage != null && (
           <>
             <span className="text-noir-600">·</span>
-            <span>{review.cocoaPercentage}% 可可</span>
+            <span>{review.cocoaPercentage}%</span>
           </>
         )}
         {review.purchaseDate && (
@@ -102,6 +103,12 @@ export default function ChocolateCard({ review, index, onToggleFavorite }: Choco
               <div className="flex flex-col">
                 <span className="text-noir-500">风味</span>
                 <span className="font-medium text-noir-300">{review.flavor.balance + review.flavor.clarity + review.flavor.tannin}/45</span>
+              </div>
+            )}
+            {review.aftertaste?.duration != null && (
+              <div className="flex flex-col">
+                <span className="text-noir-500">余韵</span>
+                <span className="font-medium text-noir-300">{review.aftertaste.duration + review.aftertaste.quality + review.aftertaste.personal}/15</span>
               </div>
             )}
           </div>

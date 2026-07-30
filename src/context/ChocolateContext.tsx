@@ -88,7 +88,9 @@ export function ChocolateProvider({ children }: { children: React.ReactNode }) {
     const byOrigin: Record<string, number> = {};
     reviews.forEach(r => {
       if (r.origin) {
-        byOrigin[r.origin] = (byOrigin[r.origin] || 0) + 1;
+        // 仅取国家名（"国家-具体产地" 格式中 "-" 前的部分）
+        const country = r.origin.split('-')[0].trim();
+        byOrigin[country] = (byOrigin[country] || 0) + 1;
       }
     });
 

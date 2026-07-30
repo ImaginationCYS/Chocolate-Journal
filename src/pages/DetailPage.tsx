@@ -10,13 +10,16 @@ import ScoreCircle from '../components/ScoreCircle';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useChocolate } from '../context/ChocolateContext';
 import { GRADE_CONFIG } from '../types';
-import { formatDate, formatPrice, getOriginFlag } from '../utils/helpers';
+import { formatDate, formatPrice, getOriginCode } from '../utils/helpers';
+import RadarChart from '../components/RadarChart';
+import { getNormalizedScores, getNormalizedScoresFloor, getNormalizedScoresZScore } from '../utils/radar';
 
 export default function DetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getReview, toggleFav, removeReview, duplicateExisting } = useChocolate();
+  const { getReview, toggleFav, removeReview, duplicateExisting, reviews } = useChocolate();
   const [showDelete, setShowDelete] = useState(false);
+  const [normalizeMode, setNormalizeMode] = useState<'linear' | 'floor' | 'zscore'>('linear');
 
   const review = getReview(id!);
 
@@ -109,21 +112,20 @@ export default function DetailPage() {
               <div className="flex flex-wrap items-center gap-3 text-sm text-noir-400 mb-4">
                 <span className="inline-flex items-center gap-1.5">
                   <MapPin size={14} className="text-noir-500" />
-                  {getOriginFlag(review.origin)} {review.origin || '未知'}
+                  <span className="text-[10px] font-mono font-semibold bg-noir-800 text-noir-300 px-1.5 py-0.5 rounded">{getOriginCode(review.origin)}</span>
+                  {review.origin || '未知'}
                 </span>
-                <span className="text-noir-600">·</span>
-                <span>{review.cocoaPercentage}% 可可</span>
-                {review.beanVariety && (
+                {review.flavorOrigin && (
                   <>
                     <span className="text-noir-600">·</span>
-                    <span>{review.beanVariety}</span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-[10px] font-mono font-semibold bg-noir-800 text-noir-300 px-1.5 py-0.5 rounded">{getOriginCode(review.flavorOrigin)}</span>
+                      {review.flavorOrigin}
+                    </span>
                   </>
                 )}
                 <span className="text-noir-600">·</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Calendar size={14} className="text-noir-500" />
-                  {formatDate(review.purchaseDate)}
-                </span>
+                <span>{review.cocoaPercentage}% 可可</span>
                 {review.price > 0 && (
                   <>
                     <span className="text-noir-600">·</span>
@@ -133,6 +135,11 @@ export default function DetailPage() {
                     </span>
                   </>
                 )}
+                <span className="text-noir-600">·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Calendar size={14} className="text-noir-500" />
+                  {formatDate(review.purchaseDate)}
+                </span>
               </div>
 
               {/* 风味标签 */}
@@ -196,29 +203,68 @@ export default function DetailPage() {
           ))}
         </div>
 
+        {/* 12 维雷达图 */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="glass-card p-6 mb-6 overflow-visible"
+          style={{ marginLeft: '-1rem', marginRight: '-1rem', paddingLeft: '1rem', paddingRight: '1rem' }}
+        >
+          <h3 className="font-display text-sm font-semibold text-noir-200 mb-4 flex items-center gap-2 px-4">
+            <svg width={14} height={14} viewBox="0 0 14 14" fill="none" className="text-cocoa-400">
+              <polygon points="7,1 13,5 13,11 7,13 1,11 1,5" stroke="currentColor" strokeWidth="1.2" fill="none" />
+            </svg>
+            12 维风味雷达图
+            <div className="ml-auto flex items-center gap-1 bg-noir-800/50 rounded-lg p-0.5">
+              <button onClick={() => setNormalizeMode('linear')} className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-all duration-200 ${normalizeMode === 'linear' ? 'bg-gold-500/20 text-gold-300' : 'text-noir-500 hover:text-noir-300'}`}>原始</button>
+              <button onClick={() => setNormalizeMode('floor')} className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-all duration-200 ${normalizeMode === 'floor' ? 'bg-gold-500/20 text-gold-300' : 'text-noir-500 hover:text-noir-300'}`}>基准线</button>
+              <button onClick={() => setNormalizeMode('zscore')} className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-all duration-200 ${normalizeMode === 'zscore' ? 'bg-gold-500/20 text-gold-300' : 'text-noir-500 hover:text-noir-300'}`}>Z-Score</button>
+            </div>
+          </h3>
+          <div className="flex justify-center overflow-visible" key={normalizeMode}>
+            <RadarChart
+              datasets={[
+                {
+                  name: review.name,
+                  values: normalizeMode === 'floor'
+                    ? getNormalizedScoresFloor(review)
+                    : normalizeMode === 'zscore'
+                      ? getNormalizedScoresZScore(review, reviews)
+                      : getNormalizedScores(review),
+                },
+                ...(normalizeMode === 'zscore'
+                  ? [{ name: '平均基准', values: Array(12).fill(50), baseline: true }]
+                  : []),
+              ]}
+              size={380}
+            />
+          </div>
+        </motion.div>
+
         {/* 详细信息 */}
         <div className="grid md:grid-cols-2 gap-6">
           {/* 外观详情 */}
           <DetailCard title="外观与质地" icon={Eye} hex="#CD9575">
-            <DetailItem label="光泽度" value={`${review.appearance.gloss}/5`} sub={review.appearance.gloss >= 4 ? '明亮有光泽' : review.appearance.gloss >= 2 ? '有轻微白霜' : '严重白霜'} />
-            <DetailItem label="断裂声" value={`${review.appearance.snap}/5`} sub={review.appearance.snap >= 4 ? '清脆利落' : '声音闷哑'} />
+            <DetailItem label="外观光泽" value={`${review.appearance.gloss}/5`} sub={review.appearance.gloss >= 4 ? '明亮有光泽' : review.appearance.gloss >= 2 ? '有轻微白霜' : '严重白霜'} />
+            <DetailItem label="断裂声响" value={`${review.appearance.snap}/5`} sub={review.appearance.snap >= 4 ? '清脆利落' : '声音闷哑'} />
             <DetailItem label="融化质地" value={`${review.appearance.texture}/10`} sub={review.appearance.texture >= 8 ? '丝绒般顺滑' : review.appearance.texture >= 4 ? '略有砂砾感' : '蜡质感或粘稠'} />
             {review.appearance.notes && <DetailItem label="备注" value={review.appearance.notes} />}
           </DetailCard>
 
           {/* 香气详情 */}
           <DetailCard title="香气复杂度" icon={Wind} hex="#F5C842">
-            <DetailItem label="纯净度" value={`${review.aroma.purity}/5`} sub="没有纸板味、霉味或化学异味" />
-            <DetailItem label="强度" value={`${review.aroma.intensity}/5`} sub="香气是否浓郁奔放" />
-            <DetailItem label="层次" value={`${review.aroma.complexity}/10`} sub="能否辨识出多种风味线索" />
+            <DetailItem label="香气纯净" value={`${review.aroma.purity}/5`} sub="没有纸板味、霉味或化学异味" />
+            <DetailItem label="香气强度" value={`${review.aroma.intensity}/5`} sub="香气是否浓郁奔放" />
+            <DetailItem label="香气层次" value={`${review.aroma.complexity}/10`} sub="能否辨识出多种风味线索" />
             {review.aroma.dryAroma && <DetailItem label="干香" value={review.aroma.dryAroma} />}
             {review.aroma.wetAroma && <DetailItem label="湿香" value={review.aroma.wetAroma} />}
           </DetailCard>
 
           {/* 风味详情 */}
           <DetailCard title="风味与平衡度" icon={ChefHat} hex="#E88078">
-            <DetailItem label="酸苦甜平衡" value={`${review.flavor.balance}/15`} sub="三者是否和谐共生" />
-            <DetailItem label="风味清晰度" value={`${review.flavor.clarity}/20`} sub="入口、中段、余味的变化" />
+            <DetailItem label="酸甜平衡" value={`${review.flavor.balance}/15`} sub="三者是否和谐共生" />
+            <DetailItem label="风味清晰" value={`${review.flavor.clarity}/20`} sub="入口、中段、余味的变化" />
             <DetailItem label="单宁涩感" value={`${review.flavor.tannin}/10`} sub="如红酒般的细腻收敛" />
             {review.flavor.topNote && <DetailItem label="前调" value={review.flavor.topNote} />}
             {review.flavor.middleNote && <DetailItem label="中调" value={review.flavor.middleNote} />}
