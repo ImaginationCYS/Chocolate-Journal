@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, PlusCircle, Library, BarChart3, GitCompare, Menu, X, Download, Upload, Settings, Check, AlertCircle } from 'lucide-react';
+import { Home, PlusCircle, Library, BarChart3, GitCompare, Globe2, Menu, X, Download, Upload, Settings, Check, AlertCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useChocolate } from '../context/ChocolateContext';
 
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/collection', icon: Library, label: '收藏' },
   { to: '/compare', icon: GitCompare, label: '对比' },
   { to: '/stats', icon: BarChart3, label: '统计' },
+  { to: '/globe', icon: Globe2, label: '视野' },
 ];
 
 function ImportExportMenu() {

@@ -27,7 +27,14 @@
 - 同时选取 2–6 款巧克力，12 维雷达图叠加对比
 - 多维度对比表格，颜色编码一目了然
 
-### 🎨 设计美学
+### � 巧克力足迹（3D 地球）
+- **可交互地球**：拖拽旋转（惯性滑动）、滚轮缩放、自动旋转
+- **真实世界地图**：177 国真实轮廓 + 经纬网 + 大气光晕，Canvas 手绘 3D 球体
+- **足迹标记**：品鉴过的国家脉冲光点 + 涟漪环，可可产地绿色 / 增味产地棕色 / 兼有金色
+- **智能悬停**：精确多边形检测 + 小国家标记点邻近兑底，背面标记三维剔除
+- **足迹榜单**：中文国名 + ISO 缩写，悬停平滑展开该国巧克力列表，点击直达详情页
+
+### �🎨 设计美学
 - 深色主题 · 玻璃拟态卡片 · 金色点缀
 - Framer Motion 流畅动画 · 响应式布局
 
@@ -42,6 +49,7 @@
 | 样式 | Tailwind CSS 3 |
 | 动画 | Framer Motion 11 |
 | 图表 | Recharts 2 |
+| 地理 | d3-geo 3 + topojson-client + world-atlas |
 | 路由 | React Router 6 |
 | 日期 | date-fns 3 |
 | 图标 | Lucide React |
@@ -74,6 +82,7 @@ npm run build
 
 | 版本 | 日期 | 更新内容 |
 |------|------|---------|
+| **v2.1.0** | 2026-08-16 | 3D 巧克力足迹地球、可可/增味分色、足迹榜单悬停展开 |
 | **v2.0.0** | 2026-07-30 | 12维雷达图、对比页、三种归一化模式、品牌补全、产地缩写、表单重构 |
 | v0.3.0 | 2026-07 | 修复 GitHub Pages 部署工作流 |
 | v0.2.0 | 2026-07 | 添加 GitHub Pages 自动部署 |
@@ -95,6 +104,7 @@ src/
 │   ├── ChocolateCard.tsx      # 收藏卡片
 │   ├── ConfirmDialog.tsx      # 确认弹窗
 │   ├── EmptyState.tsx         # 空状态
+│   ├── Globe.tsx              # 3D 地球（Canvas + d3-geo）
 │   ├── Layout.tsx             # 布局框架
 │   ├── Navbar.tsx             # 导航栏
 │   ├── RadarChart.tsx         # 12维雷达图 (SVG)
@@ -107,11 +117,13 @@ src/
 │   ├── CollectionPage.tsx     # 收藏列表
 │   ├── ComparePage.tsx        # 风味对比
 │   ├── DetailPage.tsx         # 详情页
+│   ├── GlobePage.tsx          # 巧克力足迹（3D 地球）
 │   ├── HomePage.tsx           # 首页
 │   └── StatsPage.tsx          # 统计分析
 ├── types/
 │   └── index.ts               # TypeScript 类型定义
 └── utils/
+    ├── globe.ts               # 国家地理数据 · 足迹汇总
     ├── helpers.ts             # 格式化 · 国家代码映射
     ├── radar.ts               # 雷达图归一化算法
     └── storage.ts             # localStorage 读写

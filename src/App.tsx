@@ -7,6 +7,7 @@ import CollectionPage from './pages/CollectionPage';
 import DetailPage from './pages/DetailPage';
 import StatsPage from './pages/StatsPage';
 import ComparePage from './pages/ComparePage';
+import GlobePage from './pages/GlobePage';
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
             <Route path="detail/:id" element={<DetailPage />} />
             <Route path="stats" element={<StatsPage />} />
             <Route path="compare" element={<ComparePage />} />
+            <Route path="globe" element={<GlobePage />} />
           </Route>
         </Routes>
       </ChocolateProvider>
